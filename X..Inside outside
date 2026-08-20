@@ -1,0 +1,32 @@
+#include<graphics.h>
+#include<conio.h>
+#include<stdio.h>
+
+int main()
+{
+    int gd=DETECT,gm;
+    int p[]={200,100,350,150,300,300,150,250,200,100};
+    int x=250,y=200;
+    int i,j,inside=0;
+
+    initgraph(&gd,&gm,"C:\\Turboc3\\BGI");
+
+    drawpoly(5,p);
+
+    for(i=0,j=3;i<4;j=i++)
+    {
+        if(((p[2*i+1]>y)!=(p[2*j+1]>y)) &&
+        (x < (p[2*j]-p[2*i])*(y-p[2*i+1])/
+        (p[2*j+1]-p[2*i+1])+p[2*i]))
+            inside=!inside;
+    }
+
+    if(inside)
+        outtextxy(200,350,"Point is INSIDE");
+    else
+        outtextxy(200,350,"Point is OUTSIDE");
+
+    getch();
+    closegraph();
+    return 0;
+}
