@@ -1,0 +1,33 @@
+#include <graphics.h>
+#include <conio.h>
+
+void boundaryFill(int x, int y, int fillColor, int boundaryColor)
+{
+    int currentColor = getpixel(x, y);
+
+    if (currentColor != boundaryColor &&
+        currentColor != fillColor)
+    {
+        putpixel(x, y, fillColor);
+
+        boundaryFill(x + 1, y, fillColor, boundaryColor);
+        boundaryFill(x - 1, y, fillColor, boundaryColor);
+        boundaryFill(x, y + 1, fillColor, boundaryColor);
+        boundaryFill(x, y - 1, fillColor, boundaryColor);
+    }
+}
+
+int main()
+{
+    int gd = DETECT, gm;
+    initgraph(&gd, &gm, "");
+
+    rectangle(200, 150, 400, 350);
+
+    boundaryFill(300, 250, RED, WHITE);
+
+    getch();
+    closegraph();
+
+    return 0;
+}
