@@ -1,0 +1,35 @@
+#include <graphics.h>
+#include <conio.h>
+
+int main()
+{
+    int gd = DETECT, gm;
+    initgraph(&gd, &gm, "");
+
+    // House
+    rectangle(150, 250, 450, 450);
+
+    // Roof
+    line(150, 250, 300, 100);
+    line(300, 100, 450, 250);
+
+    // Door
+    rectangle(260, 350, 340, 450);
+
+    // Door knob
+    circle(325, 400, 5);
+
+    // Windows
+    rectangle(180, 290, 240, 350);
+    line(210, 290, 210, 350);
+    line(180, 320, 240, 320);
+
+    rectangle(360, 290, 420, 350);
+    line(390, 290, 390, 350);
+    line(360, 320, 420, 320);
+
+    getch();
+    closegraph();
+
+    return 0;
+}
