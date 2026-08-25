@@ -68,3 +68,4 @@ void loop() {
   // Wait for 1 second before reading again
   delay(1000);
 }
+...
