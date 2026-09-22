@@ -1,0 +1,463 @@
+import json
+import os
+
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
+
+
+# ============================================================
+# CONFIG
+# ============================================================
+
+BOT_TOKEN = "8974082808:AAEs--GBDmy5JcOCVxCClL_JqlfaAnWqsj0"
+
+INDEX_FILE = "players.json"
+
+
+# ============================================================
+# LOAD PLAYER INDEX
+# ============================================================
+
+def load_players():
+
+    if not os.path.exists(INDEX_FILE):
+        return {}
+
+    try:
+        with open(INDEX_FILE, "r", encoding="utf-8") as file:
+            return json.load(file)
+
+    except Exception as error:
+        print("❌ Could not load players.json:", error)
+        return {}
+
+
+players = load_players()
+
+
+# ============================================================
+# SAVE PLAYER INDEX
+# ============================================================
+
+def save_players():
+
+    try:
+
+        with open(
+            INDEX_FILE,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            json.dump(
+                players,
+                file,
+                indent=2,
+                ensure_ascii=False
+            )
+
+    except Exception as error:
+
+        print("❌ Could not save players.json:", error)
+
+
+# ============================================================
+# /START
+# ============================================================
+
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+        "⚽ FC Mobile Stats Bot\n\n"
+        "Search for a player:\n"
+        "/player Ginola\n\n"
+        "To add a player:\n"
+        "Upload the screenshot as a FILE/DOCUMENT "
+        "in the private group and use the player name "
+        "as the caption.\n\n"
+        "Example:\n"
+        "📎 Ginola.png\n"
+        "Caption: Ginola"
+    )
+
+
+# ============================================================
+# SAVE DOCUMENT FROM GROUP
+# ============================================================
+
+async def save_document(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    message = update.effective_message
+
+    # Make sure it is a document
+    if not message.document:
+        return
+
+    # Caption is required
+    if not message.caption:
+        print("⚠️ File received without player-name caption.")
+        return
+
+    # Player name from caption
+    player_name = message.caption.strip().lower()
+
+    # Ignore empty captions
+    if not player_name:
+        return
+
+    document = message.document
+
+    file_id = document.file_id
+    file_name = document.file_name or "unknown_file"
+
+    # Create player entry
+    if player_name not in players:
+
+        players[player_name] = []
+
+    # Check duplicates
+    existing_ids = [
+        item["file_id"]
+        for item in players[player_name]
+    ]
+
+    if file_id in existing_ids:
+
+        print(
+            f"⚠️ Duplicate ignored: "
+            f"{player_name} - {file_name}"
+        )
+
+        return
+
+    # Save information
+    players[player_name].append(
+        {
+            "file_id": file_id,
+            "file_name": file_name
+        }
+    )
+
+    # Save to JSON
+    save_players()
+
+    total = len(players[player_name])
+
+    print(
+        f"✅ Saved FILE: {player_name} | "
+        f"{file_name} | "
+        f"Total: {total}"
+    )
+
+    # Confirmation in group
+    await message.reply_text(
+        f"✅ {player_name.title()} saved\n"
+        f"📎 {file_name}\n"
+        f"📸 Total files: {total}"
+    )
+
+
+# ============================================================
+# /PLAYER
+# ============================================================
+
+async def player(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    # No player name
+    if not context.args:
+
+        await update.message.reply_text(
+            "❌ Please enter a player name.\n\n"
+            "Example:\n"
+            "/player Ginola"
+        )
+
+        return
+# Join all arguments
+    search = " ".join(context.args).lower().strip()
+
+    # --------------------------------------------------------
+    # EXACT MATCH
+    # --------------------------------------------------------
+
+    if search in players:
+
+        player_name = search
+        results = players[search]
+
+    else:
+
+        # ----------------------------------------------------
+        # PARTIAL MATCH
+        # ----------------------------------------------------
+
+        matches = [
+            name
+            for name in players
+            if search in name
+        ]
+
+        # No player
+        if not matches:
+
+            await update.message.reply_text(
+                f"❌ No screenshots found for:\n"
+                f"'{search}'"
+            )
+
+            return
+
+        # Multiple players
+        if len(matches) > 1:
+
+            text = "🔎 Multiple players found:\n\n"
+
+            for name in matches:
+
+                text += f"• {name.title()}\n"
+
+            text += (
+                "\nPlease type the full player name."
+            )
+
+            await update.message.reply_text(text)
+
+            return
+
+        # One partial match
+        player_name = matches[0]
+        results = players[player_name]
+
+    # --------------------------------------------------------
+    # SEND RESULT
+    # --------------------------------------------------------
+
+    await update.message.reply_text(
+        f"⚽ {player_name.title()}\n"
+        f"📎 Found {len(results)} file(s)\n\n"
+        f"Sending..."
+    )
+
+    # Send every screenshot as a FILE
+    for item in results:
+
+        try:
+
+            await update.message.reply_document(
+                document=item["file_id"],
+                filename=item.get(
+                    "file_name",
+                    "FC_Mobile_Stats"
+                )
+            )
+
+        except Exception as error:
+
+            print(
+                f"❌ Error sending "
+                f"{player_name}:",
+                error
+            )
+
+            await update.message.reply_text(
+                "⚠️ One of the files could "
+                "not be sent."
+            )
+
+
+# ============================================================
+# /LIST
+# ============================================================
+
+async def list_players(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    if not players:
+
+        await update.message.reply_text(
+            "📂 No players saved yet."
+        )
+
+        return
+
+    names = sorted(players.keys())
+
+    text = (
+        f"⚽ FC Mobile Players\n"
+        f"Total: {len(names)}\n\n"
+    )
+
+    for index, name in enumerate(names, start=1):
+
+        total = len(players[name])
+
+        text += (
+            f"{index}. {name.title()} "
+            f"({total})\n"
+        )
+
+        # Telegram message length protection
+        if len(text) > 3500:
+
+            await update.message.reply_text(text)
+
+            text = ""
+
+    if text:
+
+        await update.message.reply_text(text)
+
+
+# ============================================================
+# /COUNT
+# ============================================================
+
+async def count_players(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    total_players = len(players)
+
+    total_files = sum(
+        len(files)
+        for files in players.values()
+    )
+
+    await update.message.reply_text(
+        "📊 FC Mobile Stats Database\n\n"
+        f"👤 Players: {total_players}\n"
+        f"📎 Files: {total_files}"
+    )
+
+
+# ============================================================
+# ERROR HANDLER
+# ============================================================
+
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    print(
+        "❌ BOT ERROR:",
+        context.error
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+# Create Telegram application
+    app = (
+        Application
+        .builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
+
+    # Commands
+    app.add_handler(
+        CommandHandler(
+            "start",
+            start
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "player",
+            player
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "list",
+            list_players
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "count",
+            count_players
+        )
+    )
+
+    # IMPORTANT:
+    # Receive FILE/DOCUMENT uploads
+    app.add_handler(
+        MessageHandler(
+            filters.Document.ALL,
+            save_document
+        )
+    )
+
+    # Error handler
+    app.add_error_handler(
+        error_handler
+    )
+
+    print(
+        "===================================="
+    )
+
+    print(
+        "🤖 FC MOBILE STATS BOT"
+    )
+
+    print(
+        "===================================="
+    )
+
+    print(
+        f"👤 Players loaded: "
+        f"{len(players)}"
+    )
+
+    print(
+        f"📎 Files loaded: "
+        f"{sum(len(x) for x in players.values())}"
+    )
+
+    print(
+        "🚀 Bot is running..."
+    )
+
+    print(
+        "===================================="
+    )
+
+    # Start bot
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES
+    )
+
+
+# ============================================================
+# RUN
+# ============================================================
+
+if __name__ == "__main__":
+    main()
